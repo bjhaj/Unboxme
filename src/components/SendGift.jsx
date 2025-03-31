@@ -16,6 +16,12 @@ function SendGift() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    if (!giftId) {
+      setError('Invalid gift ID');
+      setLoading(false);
+      return;
+    }
+
     fetchGiftDetails();
   }, [giftId]);
 
@@ -28,9 +34,13 @@ function SendGift() {
         .from('gifts')
         .select('*')
         .eq('id', giftId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) {
+        setError('Gift not found');
+        return;
+      }
       setGift(data);
     } catch (error) {
       console.error('Error fetching gift details:', error);
@@ -102,10 +112,10 @@ function SendGift() {
           {gift && (
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">{gift.gift_name}</h2>
-              <p className="text-gray-600 mb-4">{gift.Description}</p>
+              <p className="text-gray-600 mb-4">{gift.description}</p>
               <div className="flex justify-between items-center">
-                <span className="text-lg font-medium text-rose-600">${gift.Price}</span>
-                <span className="text-sm text-gray-500">{gift.Brand}</span>
+                <span className="text-lg font-medium text-rose-600">${gift.price}</span>
+                <span className="text-sm text-gray-500">{gift.brand}</span>
               </div>
             </div>
           )}

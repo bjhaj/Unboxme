@@ -15,6 +15,7 @@ function GiftSelection() {
   const { genreId } = useParams();
   const navigate = useNavigate();
   const [gifts, setGifts] = useState([]);
+  const [selectedGift, setSelectedGift] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -26,7 +27,7 @@ function GiftSelection() {
       const { data, error } = await supabase
         .from('gifts')
         .select('*')
-        .eq('Genre', GENRE_NAMES[genreId])
+        .eq('genre', GENRE_NAMES[genreId])
         .order('id')
         .limit(100); // Get a larger pool to select from
 
@@ -36,6 +37,7 @@ function GiftSelection() {
       const shuffled = data.sort(() => 0.5 - Math.random());
       const selected = shuffled.slice(0, 4);
       setGifts(selected);
+      setSelectedGift(null);
     } catch (error) {
       console.error('Error fetching gifts:', error);
       setError('Failed to load gifts');
@@ -49,9 +51,9 @@ function GiftSelection() {
   }, [genreId]);
 
   const handleFinalize = () => {
-    // Store gifts in localStorage for the next page
-    localStorage.setItem('selectedGifts', JSON.stringify(gifts));
-    navigate('/send-gift');
+    if (selectedGift) {
+      navigate(`/send-gift/${selectedGift.id}`);
+    }
   };
 
   return (
@@ -75,7 +77,7 @@ function GiftSelection() {
               onClick={fetchRandomGifts}
               className="px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors"
             >
-              Get New Selection
+              Refresh Selection
             </button>
           </div>
 
@@ -91,27 +93,34 @@ function GiftSelection() {
             </div>
           ) : (
             <>
-              <div className="mb-6">
-                <p className="text-gray-600">Here are 4 gift options for your giftee. If you like these options, click Finalize to proceed. If not, click "Get New Selection" to see different options.</p>
-              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {gifts.map((gift) => (
-                  <div
+                  <button
                     key={gift.id}
-                    className="p-6 rounded-xl border-2 border-gray-200 bg-white"
+                    onClick={() => setSelectedGift(gift)}
+                    className={`p-6 rounded-xl border-2 transition-all ${
+                      selectedGift?.id === gift.id
+                        ? 'border-rose-500 bg-rose-50'
+                        : 'border-gray-200 hover:border-rose-200 bg-white'
+                    }`}
                   >
                     <div className="font-medium text-gray-900 text-lg mb-2">{gift.gift_name}</div>
-                    <div className="text-sm text-gray-500 mb-2">{gift.Description}</div>
-                    <div className="text-sm font-medium text-rose-600">${gift.Price}</div>
-                    <div className="text-xs text-gray-400 mt-1">{gift.Brand}</div>
-                  </div>
+                    <div className="text-sm text-gray-500 mb-2">{gift.description}</div>
+                    <div className="text-sm font-medium text-rose-600">${gift.price}</div>
+                    <div className="text-xs text-gray-400 mt-1">{gift.brand}</div>
+                  </button>
                 ))}
               </div>
 
               <div className="flex justify-end">
                 <button
                   onClick={handleFinalize}
-                  className="px-6 py-3 text-base font-medium text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-colors"
+                  disabled={!selectedGift}
+                  className={`px-6 py-3 text-base font-medium text-white rounded-xl 
+                    ${selectedGift 
+                      ? 'bg-rose-600 hover:bg-rose-700' 
+                      : 'bg-gray-400 cursor-not-allowed'
+                    } transition-colors`}
                 >
                   Finalize Selection
                 </button>

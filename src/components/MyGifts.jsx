@@ -1,62 +1,112 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useGifts } from '../context/GiftContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { UserAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
 
 function MyGifts() {
   const [activeTab, setActiveTab] = useState('received');
-  const { receivedGifts, sentGifts, loading, sendThanks } = useGifts();
-  const [giftDetails, setGiftDetails] = useState({});
+  const [receivedGifts, setReceivedGifts] = useState([]);
+  const [sentGifts, setSentGifts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { session } = UserAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchGiftDetails();
-  }, [receivedGifts, sentGifts]);
+    if (!session) {
+      navigate('/signin');
+      return;
+    }
+    fetchGifts();
+  }, [session, navigate]);
 
-  const fetchGiftDetails = async () => {
+  const fetchGifts = async () => {
     try {
-      const allGifts = [...receivedGifts, ...sentGifts];
-      const giftIds = allGifts.map(gift => gift.gift_id);
-      
-      const { data, error } = await supabase
-        .from('gifts')
-        .select('*')
-        .in('id', giftIds);
+      setLoading(true);
+      setError(null);
+
+      // Fetch received gifts
+      const { data: receivedData, error: receivedError } = await supabase
+        .from('gift_transactions')
+        .select(`
+          *,
+          gift:gifts(*),
+          sender:sender_id(email)
+        `)
+        .eq('recipient_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (receivedError) throw receivedError;
+
+      // Fetch sent gifts
+      const { data: sentData, error: sentError } = await supabase
+        .from('gift_transactions')
+        .select(`
+          *,
+          gift:gifts(*),
+          recipient:recipient_id(email)
+        `)
+        .eq('sender_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (sentError) throw sentError;
+
+      setReceivedGifts(receivedData || []);
+      setSentGifts(sentData || []);
+    } catch (err) {
+      console.error('Error fetching gifts:', err);
+      setError('Failed to load gifts. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptGift = async (giftId) => {
+    try {
+      const { error } = await supabase
+        .from('gift_transactions')
+        .update({ status: 'accepted' })
+        .eq('id', giftId);
 
       if (error) throw error;
+      fetchGifts(); // Refresh the gifts list
+    } catch (err) {
+      console.error('Error accepting gift:', err);
+      setError('Failed to accept gift. Please try again.');
+    }
+  };
 
-      const details = {};
-      data.forEach(gift => {
-        details[gift.id] = gift;
-      });
-      setGiftDetails(details);
-    } catch (error) {
-      console.error('Error fetching gift details:', error);
+  const handleDeclineGift = async (giftId) => {
+    try {
+      const { error } = await supabase
+        .from('gift_transactions')
+        .update({ status: 'declined' })
+        .eq('id', giftId);
+
+      if (error) throw error;
+      fetchGifts(); // Refresh the gifts list
+    } catch (err) {
+      console.error('Error declining gift:', err);
+      setError('Failed to decline gift. Please try again.');
     }
   };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
-  };
-
-  const handleSendThanks = async (giftId) => {
-    try {
-      const result = await sendThanks(giftId);
-      if (!result.success) {
-        console.error('Failed to send thanks:', result.error);
-      }
-    } catch (error) {
-      console.error('Error sending thanks:', error);
-    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen bg-gradient-to-b from-rose-50 to-white p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-600"></div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -68,161 +118,142 @@ function MyGifts() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <Link to="/dashboard" className="text-2xl font-bold text-gray-900">UnboxMe</Link>
+            <div className="flex items-center space-x-4">
+              <span className="text-gray-700">{session?.user?.email}</span>
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">My Gifts</h1>
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">My Gifts</h1>
+          <p className="text-xl text-gray-600">View and manage your gifts</p>
+        </div>
 
-          {/* Tabs */}
-          <div className="flex space-x-4 mb-8">
+        {error && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="border-b border-gray-200 mb-8">
+          <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('received')}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`${
                 activeTab === 'received'
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-rose-50'
-              }`}
+                  ? 'border-rose-500 text-rose-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
-              Received
+              Received Gifts
             </button>
             <button
               onClick={() => setActiveTab('sent')}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`${
                 activeTab === 'sent'
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-rose-50'
-              }`}
+                  ? 'border-rose-500 text-rose-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
-              Sent
+              Sent Gifts
             </button>
-          </div>
+          </nav>
+        </div>
 
-          {/* Gifts List */}
-          <div className="bg-white rounded-2xl shadow-lg">
-            {activeTab === 'received' && (
-              <div className="divide-y divide-gray-100">
-                {receivedGifts.map((gift) => {
-                  const giftDetail = giftDetails[gift.gift_id];
-                  return (
-                    <div key={gift.id} className="p-6">
-                      <div className="flex items-start">
-                        <div className="flex-shrink-0 w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-2xl">
-                          🎁
-                        </div>
-                        <div className="ml-4 flex-1">
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-medium text-gray-900">
-                              {giftDetail?.gift_name || 'Loading...'}
-                            </h3>
-                            <time className="text-sm text-gray-500">{formatDate(gift.created_at)}</time>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">From: {gift.sender_email}</p>
-                          {giftDetail && (
-                            <div className="mt-2 text-sm text-gray-600">
-                              <p className="text-rose-600 font-medium">${giftDetail.Price}</p>
-                              <p className="text-gray-500">{giftDetail.Description}</p>
-                              <p className="text-xs text-gray-400">{giftDetail.Brand} • {giftDetail.Genre}</p>
-                            </div>
-                          )}
-                          {gift.message && (
-                            <p className="mt-2 text-gray-700 bg-gray-50 rounded-lg p-3">
-                              "{gift.message}"
-                            </p>
-                          )}
-                          <div className="mt-4 flex space-x-4">
-                            {!gift.thanks_sent && (
-                              <button 
-                                onClick={() => handleSendThanks(gift.id)}
-                                className="text-sm text-rose-600 hover:text-rose-700 font-medium"
-                              >
-                                Send Thanks
-                              </button>
-                            )}
-                            <Link
-                              to="/send-gifts"
-                              className="text-sm text-gray-500 hover:text-gray-700 font-medium"
-                            >
-                              Send Gift Back
-                            </Link>
-                          </div>
-                        </div>
+        {/* Gifts List */}
+        <div className="space-y-6">
+          {activeTab === 'received' ? (
+            receivedGifts.length > 0 ? (
+              receivedGifts.map((gift) => (
+                <div
+                  key={gift.id}
+                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        {gift.gift.gift_name}
+                      </h3>
+                      <p className="text-gray-600 mb-4">{gift.gift.Description}</p>
+                      <div className="text-sm text-gray-500">
+                        <p>From: {gift.sender.email}</p>
+                        <p>Received: {formatDate(gift.created_at)}</p>
+                        <p>Price: ${gift.gift.Price}</p>
                       </div>
+                      {gift.message && (
+                        <p className="mt-4 text-gray-700 italic">"{gift.message}"</p>
+                      )}
                     </div>
-                  );
-                })}
-
-                {receivedGifts.length === 0 && (
-                  <div className="p-8 text-center">
-                    <div className="text-4xl mb-4">🎁</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No gifts yet</h3>
-                    <p className="text-gray-600">When someone sends you a gift, it will appear here.</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'sent' && (
-              <div className="divide-y divide-gray-100">
-                {sentGifts.map((gift) => {
-                  const giftDetail = giftDetails[gift.gift_id];
-                  return (
-                    <div key={gift.id} className="p-6">
-                      <div className="flex items-start">
-                        <div className="flex-shrink-0 w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-2xl">
-                          🎁
-                        </div>
-                        <div className="ml-4 flex-1">
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-medium text-gray-900">
-                              {giftDetail?.gift_name || 'Loading...'}
-                            </h3>
-                            <time className="text-sm text-gray-500">{formatDate(gift.created_at)}</time>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">To: {gift.recipient_email}</p>
-                          {giftDetail && (
-                            <div className="mt-2 text-sm text-gray-600">
-                              <p className="text-rose-600 font-medium">${giftDetail.Price}</p>
-                              <p className="text-gray-500">{giftDetail.Description}</p>
-                              <p className="text-xs text-gray-400">{giftDetail.Brand} • {giftDetail.Genre}</p>
-                            </div>
-                          )}
-                          {gift.message && (
-                            <p className="mt-2 text-gray-700 bg-gray-50 rounded-lg p-3">
-                              "{gift.message}"
-                            </p>
-                          )}
-                          <div className="mt-4">
-                            <span className={`text-sm font-medium ${
-                              gift.thanks_sent ? 'text-green-600' : 'text-gray-500'
-                            }`}>
-                              {gift.thanks_sent ? 'Thanks received!' : 'Waiting for thanks...'}
-                            </span>
-                          </div>
-                        </div>
+                    {gift.status === 'pending' && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleAcceptGift(gift.id)}
+                          className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleDeclineGift(gift.id)}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                        >
+                          Decline
+                        </button>
                       </div>
-                    </div>
-                  );
-                })}
-
-                {sentGifts.length === 0 && (
-                  <div className="p-8 text-center">
-                    <div className="text-4xl mb-4">📤</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No sent gifts</h3>
-                    <p className="text-gray-600 mb-6">Start spreading joy by sending gifts to your friends!</p>
-                    <Link
-                      to="/send-gifts"
-                      className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-colors"
-                    >
-                      Send a Gift
-                    </Link>
+                    )}
                   </div>
-                )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-500">No gifts received yet.</p>
+                <Link
+                  to="/send-gifts"
+                  className="mt-4 inline-block text-rose-600 hover:text-rose-700"
+                >
+                  Send a gift to someone
+                </Link>
               </div>
-            )}
-          </div>
+            )
+          ) : (
+            sentGifts.length > 0 ? (
+              sentGifts.map((gift) => (
+                <div
+                  key={gift.id}
+                  className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow"
+                >
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      {gift.gift.gift_name}
+                    </h3>
+                    <p className="text-gray-600 mb-4">{gift.gift.Description}</p>
+                    <div className="text-sm text-gray-500">
+                      <p>To: {gift.recipient.email}</p>
+                      <p>Sent: {formatDate(gift.created_at)}</p>
+                      <p>Price: ${gift.gift.Price}</p>
+                      <p>Status: <span className="capitalize">{gift.status}</span></p>
+                    </div>
+                    {gift.message && (
+                      <p className="mt-4 text-gray-700 italic">"{gift.message}"</p>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-500">No gifts sent yet.</p>
+                <Link
+                  to="/send-gifts"
+                  className="mt-4 inline-block text-rose-600 hover:text-rose-700"
+                >
+                  Send your first gift
+                </Link>
+              </div>
+            )
+          )}
         </div>
       </main>
     </div>
