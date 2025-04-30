@@ -1,4 +1,4 @@
-he UnboxMe system follows a React + Vite architecture backed by Supabase (PostgreSQL) and integrated external services like Attio CRM API and Stripe.
+The UnboxMe system follows a React + Vite architecture backed by Supabase (PostgreSQL) and integrated external services like Attio CRM API and Stripe.
 Frontend: Built with React and styled with CSS, responsible for rendering customer dashboards, login/signup, gift selection, and profile views.
 Backend/Data Layer: Supabase is used as a backend-as-a-service (BaaS) for authentication, database operations, and serverless functions.
 Third-Party APIs: Attio (CRM), Stripe (payments).
