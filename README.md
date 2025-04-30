@@ -89,3 +89,36 @@ For deployment or handoff questions, please reach out to:
 
 **Sponsor:** Moshe Scheiner  
 📧 moshe@unboxme.com
+
+---
+
+## 📁 File Structure
+
+```
+Unboxme/
+├── public/                      # Static assets
+│   └── vite.svg
+├── src/
+│   ├── App.jsx, App.css         # Root React component
+│   ├── main.jsx, router.jsx     # Entry and routing logic
+│   ├── index.css                # Global styles
+│   ├── supabaseClient.js        # Supabase client instance
+│   ├── assets/                  # Static images (e.g., react.svg)
+│   ├── components/              # Reusable views/components
+│   │   ├── dashboard.jsx
+│   │   ├── GiftSelection.jsx
+│   │   ├── MyGifts.jsx
+│   │   ├── SendGift.jsx
+│   │   ├── SendGifts.jsx
+│   │   ├── privateRoute.jsx
+│   │   ├── signin.jsx
+│   │   └── signup.jsx
+│   └── context/                 # React context for auth and state
+│       ├── AuthContext.jsx
+│       └── GiftContext.jsx
+├── update_schema.sql           # SQL schema for Supabase
+├── package.json
+├── vite.config.js
+├── eslint.config.js
+└── README.md
+```
